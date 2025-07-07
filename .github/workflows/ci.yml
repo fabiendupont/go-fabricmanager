@@ -103,7 +103,7 @@ jobs:
     # Basic checks (all scenarios)
     - name: Build package
       run: |
-        CGO_ENABLED=1 go build -o fmpm cmd/fmpm/main.go
+        CGO_ENABLED=1 go build -o fmpm ./cmd/fmpm
         
     - name: Run unit tests
       run: |
