@@ -1,5 +1,7 @@
 # NVIDIA FabricManager Go Package
 
+![API Coverage](https://img.shields.io/badge/API%20Coverage-0%25-red)
+
 A Go package and CLI tool for managing GPU partitions for NVIDIA Fabric Manager's Shared NVSwitch feature.
 
 ## Overview
@@ -13,8 +15,21 @@ This package provides a Go interface to NVIDIA FabricManager, allowing you to:
 
 ## Installation
 
+### For a Specific FabricManager Version
+
 ```bash
-go get github.com/NVIDIA/go-fabricmanager
+# Install for FabricManager 575.57.08
+go get github.com/NVIDIA/go-fabricmanager@fm/575.57.08
+
+# Or use a specific release tag
+go get github.com/NVIDIA/go-fabricmanager@v575.57.08-1.0
+```
+
+### For Latest Development Version
+
+```bash
+# Install from main branch (development)
+go get github.com/NVIDIA/go-fabricmanager@main
 ```
 
 ## Prerequisites
@@ -52,6 +67,25 @@ sudo yum install nvidia-fabricmanager-devel-<version>
 ```
 
 **Note:** The development package is only needed if you're developing or building the Go package from source. For regular usage, only the runtime package is required.
+
+## Branch Strategy
+
+This repository uses a **branch-per-FM-version** strategy:
+
+- **`main`**: Development branch (no specific headers)
+- **`fm/<version>`**: Branch for specific FabricManager version (e.g., `fm/575.57.08`)
+- **Tags**: Release tags on version branches (e.g., `v575.57.08-1.0`)
+
+### Available Versions
+
+- **`fm/575.57.08`**: FabricManager 575.57.08 support
+- **`main`**: Latest development version
+
+### How to Choose
+
+1. **For production**: Use a specific version branch or tag
+2. **For development**: Use `main` branch
+3. **For compatibility**: Match your system's FabricManager version
 
 ## Usage
 
@@ -145,28 +179,31 @@ make build
 
 ## Versioning
 
-This project tracks NVIDIA FabricManager versions. Each Git tag is a complete, tested release of the Go bindings and headers for a specific FabricManager version.
+This project uses a **branch-per-FM-version** strategy for managing multiple FabricManager versions in parallel.
 
-- **Tag format:** `v<fabricmanager-version>-<go-change-number>` (e.g., `v575.57.08-1`)
-- **Headers:** Only the current version's headers are present in the `headers/` directory.
-- **Go bindings:** Always match the headers in the current repository state.
+- **Branch format:** `fm/<fabricmanager-version>` (e.g., `fm/575.57.08`)
+- **Tag format:** `v<fabricmanager-version>-<X.Y>` (e.g., `v575.57.08-1.0`)
+- **Headers:** Each branch contains headers for its specific FM version in the `headers/` directory.
 
 **Release workflow:**
-1. Update `headers/` to the new FabricManager version.
-2. Update Go bindings if needed.
+1. Create a new branch for the FM version: `git checkout -b fm/<version>`
+2. Update headers and Go bindings for that version.
 3. Test thoroughly.
-4. Create a tag for the new release (e.g., `v575.57.08-1`).
-5. Push the tag to trigger a GitHub release.
+4. Create a tag for the release: `git tag v<version>-1.0`
+5. Push branch and tag to trigger GitHub release.
 
-**Historical versions:**
-- Only the latest version is present in the main branch.
-- Previous versions are available via Git tags.
+**Version management:**
+- Each FM version has its own branch for parallel maintenance
+- Tags provide immutable release points on each branch
+- Main branch is for development (no specific headers)
 
 **Example**
 
-- `v575.57.08-1`: First release for FabricManager 575.57.08
-- `v575.57.08-2`: Go-specific bug fix for 575.57.08
-- `v580.0.0-1`: First release for FabricManager 580.0.0
+- `fm/575.57.08` branch with `v575.57.08-1.0` tag (initial release)
+- `fm/575.57.08` branch with `v575.57.08-1.1` tag (bug fix)
+- `fm/575.57.08` branch with `v575.57.08-2.0` tag (new features)
+- `fm/580.0.0` branch with `v580.0.0-1.0` tag (initial release)
+- `main` branch for development
 
 ## API Reference
 
@@ -224,7 +261,82 @@ See the `examples/` directory for complete working examples.
 
 ## License
 
-This project is licensed under the same terms as the NVIDIA FabricManager library.
+- **Go bindings, CLI, and all original code:** Licensed under the [MIT License](LICENSE)
+- **NVIDIA FabricManager components:** © NVIDIA Corporation, subject to their own license terms
+
+### Important Notice
+
+This project is **NOT affiliated with or endorsed by NVIDIA Corporation**. The Go bindings and CLI implementation are independent open-source work that provides Go language bindings for NVIDIA FabricManager.
+
+For details about NVIDIA's components, see the [NOTICE](NOTICE) file.
+
+## Coverage Analysis
+
+This project includes automated coverage analysis to ensure complete API and CLI compatibility.
+
+### API Coverage
+- **C API Coverage:** Measures how many C API symbols from `libnvfm.so` are wrapped in the Go package
+- **CLI Coverage:** Compares the original `fmpm` tool with our Go CLI implementation
+- **Version-specific:** Downloads the exact FabricManager version for comparison
+
+### Running Coverage Analysis
+
+```bash
+# Run full coverage analysis
+./scripts/coverage-analysis.sh --json --update-readme
+
+# Run coverage analysis with CLI comparison
+./scripts/coverage-analysis.sh --json --update-readme --cli-version 575.57.08
+
+# Show coverage summary
+./scripts/coverage-analysis.sh --summary
+
+# Compare CLI implementations (standalone)
+./scripts/cli-comparison.sh --version 575.57.08
+
+# Clean temporary files
+./scripts/coverage-analysis.sh --clean
+```
+
+### Coverage Reports
+- **Markdown reports:** Generated in `coverage/` directory
+- **JSON reports:** For CI integration
+- **README badges:** Automatically updated with coverage percentage
+
+### CI Integration
+The CI/CD pipeline runs automatically on:
+- **Pull requests** - Full validation with coverage analysis
+- **Pushes to branches** - Extended testing and coverage
+- **Tag pushes** - Release creation with assets
+
+### CI/CD Pipeline
+The repository uses a single, comprehensive CI/CD pipeline with incremental complexity:
+
+**Basic Checks (All Scenarios):**
+- ✅ Package builds successfully
+- ✅ Unit tests pass
+- ✅ Code passes linting
+
+**Extended Checks (PRs & Pushes):**
+- ✅ Race condition detection
+- ✅ Security vulnerability scanning
+- ✅ API coverage analysis (100% required)
+- ✅ CLI functionality testing
+- ✅ Cross-compilation testing
+- ✅ Coverage reports and badges
+
+**Release Steps (Tag Pushes):**
+- ✅ CLI comparison with original tool
+- ✅ Release creation with assets
+- ✅ Binary uploads for multiple architectures
+
+### Quality Requirements
+All changes must pass the quality gates defined in the CI/CD pipeline. The pipeline automatically adapts its complexity based on the trigger:
+
+- **PRs & Pushes:** Full validation with coverage analysis
+- **Releases:** Basic validation + release creation
+
+
 
 ## Contributing
 
@@ -232,7 +344,8 @@ This project is licensed under the same terms as the NVIDIA FabricManager librar
 2. Create a feature branch
 3. Make your changes
 4. Add tests
-5. Submit a pull request
+5. Run coverage analysis: `./scripts/coverage-analysis.sh`
+6. Submit a pull request
 
 ## Support
 
