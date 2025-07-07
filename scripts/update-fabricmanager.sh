@@ -8,7 +8,7 @@ set -e
 # Configuration
 FABRICMANAGER_BASE_URL="https://developer.download.nvidia.com/compute/nvidia-driver/redist/fabricmanager"
 ARCH="linux-x86_64"
-TEMP_DIR="/tmp/fabricmanager-update"
+TEMP_DIR="${TMPDIR:-/tmp}/fabricmanager-update"
 
 # Colors for output
 RED='\033[0;31m'
@@ -149,8 +149,19 @@ download_fabricmanager() {
     
     log_info "Downloading FabricManager version $version..."
     
-    # Download the archive
-    if ! curl -L -o "$archive_path" "$download_url"; then
+    # Ensure temp directory exists and is writable
+    mkdir -p "$TEMP_DIR"
+    if [ ! -w "$TEMP_DIR" ]; then
+        log_error "Temp directory $TEMP_DIR is not writable"
+        return 1
+    fi
+    
+    # Clean up any existing archive
+    rm -f "$archive_path"
+    
+    # Download the archive with better error handling
+    log_info "Downloading from: $download_url"
+    if ! curl -L --fail --show-error -o "$archive_path" "$download_url"; then
         log_error "Failed to download $download_url"
         return 1
     fi
@@ -161,7 +172,7 @@ download_fabricmanager() {
         return 1
     fi
     
-    log_success "Downloaded $archive_name"
+    log_success "Downloaded $archive_name ($(du -h "$archive_path" | cut -f1))"
     
     # Extract the archive
     log_info "Extracting archive..."
@@ -175,9 +186,12 @@ download_fabricmanager() {
     
     if [ -z "$extracted_dir" ]; then
         log_error "Could not find extracted directory"
+        log_info "Contents of $TEMP_DIR:"
+        ls -la "$TEMP_DIR" || true
         return 1
     fi
     
+    log_info "Found extracted directory: $extracted_dir"
     echo "$extracted_dir"
 }
 
@@ -195,17 +209,27 @@ update_headers() {
     if [ -d "headers" ] && [ "$(ls -A headers 2>/dev/null)" ]; then
         local backup_dir="headers.backup.$(date +%Y%m%d_%H%M%S)"
         log_info "Backing up current headers to $backup_dir"
-        mv headers "$backup_dir"
+        if ! mv headers "$backup_dir"; then
+            log_warning "Failed to backup headers, removing old headers"
+            rm -rf headers
+        fi
     fi
+    
+    # Create fresh headers directory
+    mkdir -p "headers"
     
     # Copy new headers
     if [ -d "$extracted_dir/include" ]; then
-        if ! cp -r "$extracted_dir/include" "headers"; then
+        log_info "Copying headers from $extracted_dir/include"
+        if ! cp -r "$extracted_dir/include"/* headers/; then
             log_error "Failed to copy headers"
             return 1
         fi
+        log_success "Successfully copied headers"
     else
         log_error "No include directory found in extracted archive"
+        log_info "Contents of $extracted_dir:"
+        ls -la "$extracted_dir" || true
         return 1
     fi
     
