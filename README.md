@@ -35,7 +35,7 @@ go get github.com/NVIDIA/go-fabricmanager@main
 ## Prerequisites
 
 - NVIDIA FabricManager runtime package installed (for runtime library)
-- Go 1.21 or later
+- Go 1.22 or later
 - CGO enabled (required for C library bindings)
 
 ### Runtime Dependencies

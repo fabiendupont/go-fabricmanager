@@ -6,7 +6,7 @@ Thank you for your interest in contributing to the NVIDIA FabricManager Go Packa
 
 ### Prerequisites
 
-1. **Go 1.21 or later**
+1. **Go 1.22 or later**
    ```bash
    # Check your Go version
    go version
