@@ -55,24 +55,24 @@ extract_c_api() {
     
     # Extract function declarations, types, and constants
     {
-        # Functions
+        # Functions (extract just the function name)
         for header in $header_files; do
-            grep -h "^[a-zA-Z_][a-zA-Z0-9_]*\s\+[a-zA-Z_][a-zA-Z0-9_]*\s*(" "$header" 2>/dev/null || true
+            grep -h "^[a-zA-Z_][a-zA-Z0-9_]*\s\+[a-zA-Z_][a-zA-Z0-9_]*\s*(" "$header" 2>/dev/null | sed 's/^[a-zA-Z_][a-zA-Z0-9_]*\s\+\([a-zA-Z_][a-zA-Z0-9_]*\)\s*(.*/\1/' || true
         done
         
-        # Type definitions
+        # Type definitions (extract just the type name)
         for header in $header_files; do
-            grep -h "^typedef\s\+.*\s\+[a-zA-Z_][a-zA-Z0-9_]*\s*;" "$header" 2>/dev/null || true
+            grep -h "^typedef\s\+.*\s\+[a-zA-Z_][a-zA-Z0-9_]*\s*;" "$header" 2>/dev/null | sed 's/^typedef\s\+.*\s\+\([a-zA-Z_][a-zA-Z0-9_]*\)\s*;.*/\1/' || true
         done
         
-        # Constants and macros
+        # Constants and macros (extract just the name)
         for header in $header_files; do
-            grep -h "^#define\s\+[a-zA-Z_][a-zA-Z0-9_]*" "$header" 2>/dev/null || true
+            grep -h "^#define\s\+[a-zA-Z_][a-zA-Z0-9_]*" "$header" 2>/dev/null | sed 's/^#define\s\+\([a-zA-Z_][a-zA-Z0-9_]*\).*/\1/' || true
         done
         
-        # Struct definitions
+        # Struct definitions (extract just the struct name)
         for header in $header_files; do
-            grep -h "^struct\s\+[a-zA-Z_][a-zA-Z0-9_]*" "$header" 2>/dev/null || true
+            grep -h "^struct\s\+[a-zA-Z_][a-zA-Z0-9_]*" "$header" 2>/dev/null | sed 's/^struct\s\+\([a-zA-Z_][a-zA-Z0-9_]*\).*/\1/' || true
         done
     } | sed 's/^[[:space:]]*//' | sort -u > "$output_file"
     
@@ -93,14 +93,81 @@ extract_go_api() {
         # Types
         grep -h "^type\s\+[A-Z][a-zA-Z0-9_]*" "$GO_PACKAGE_FILE" 2>/dev/null || true
         
-        # Constants
+        # Individual constants
         grep -h "^const\s\+[A-Z][a-zA-Z0-9_]*" "$GO_PACKAGE_FILE" 2>/dev/null || true
+        
+        # Constants in const blocks
+        awk '/^const \($/,/^\)$/ { if ($0 ~ /^[[:space:]]*[A-Z][A-Z0-9_]*[[:space:]]*=/) { gsub(/^[[:space:]]*/, ""); gsub(/[[:space:]]*=.*$/, ""); print } }' "$GO_PACKAGE_FILE" 2>/dev/null || true
         
         # Variables
         grep -h "^var\s\+[A-Z][a-zA-Z0-9_]*" "$GO_PACKAGE_FILE" 2>/dev/null || true
     } | sed 's/^[[:space:]]*//' | sort -u > "$output_file"
     
     log_success "Extracted $(wc -l < "$output_file") Go API symbols"
+}
+
+# Function to extract and compare constant values
+extract_constant_values() {
+    local c_values_file="$TEMP_DIR/c_values.txt"
+    local go_values_file="$TEMP_DIR/go_values.txt"
+    local comparison_file="$TEMP_DIR/constant_comparison.txt"
+    
+    log_info "Extracting constant values for comparison..."
+    
+    # Extract C macro values (simple constants only)
+    {
+        for header in $(find "$HEADERS_DIR" -name "*.h" 2>/dev/null || true); do
+            # Extract simple #define constants (no parentheses, no complex expressions)
+            grep -h "^#define\s\+[A-Za-z_][A-Za-z0-9_]*\s\+[^()]*$" "$header" 2>/dev/null | \
+                awk '/^#define[[:space:]]+[A-Za-z_][A-Za-z0-9_]*[[:space:]]+[^()]*$/ { 
+                    gsub(/^#define[[:space:]]+/, ""); 
+                    split($0, parts, /[[:space:]]+/); 
+                    if (parts[2] ~ /^[0-9]+$|^"[^"]*"$|^[0-9]+\.[0-9]+$/) {
+                        print parts[1], parts[2]
+                    }
+                }' || true
+        done
+    } | sort -f > "$c_values_file"
+    
+    # Extract Go constant values
+    {
+        # Single-line constants
+        grep -h "^const\s\+[A-Z][a-zA-Z0-9_]*\s*=" "$GO_PACKAGE_FILE" 2>/dev/null | \
+            sed 's/^const\s\+\([A-Z][a-zA-Z0-9_]*\)\s*=\s*\(.*\)/\1 \2/' || true
+        
+        # Constants in const blocks - simplified approach
+        awk '/^const \($/,/^\)$/ { 
+            if ($0 ~ /^[[:space:]]*[A-Z][A-Z0-9_]*[[:space:]]*=/) { 
+                gsub(/^[[:space:]]*/, ""); 
+                gsub(/[[:space:]]*$/, ""); 
+                split($0, a, "="); 
+                gsub(/^[[:space:]]*/, "", a[1]); 
+                gsub(/[[:space:]]*$/, "", a[2]); 
+                # Only include simple numeric and string values (no expressions)
+                if (a[2] ~ /^[[:space:]]*[0-9]+[[:space:]]*$|^[[:space:]]*"[^"]*"[[:space:]]*$|^[[:space:]]*[0-9]+\.[0-9]+[[:space:]]*$|^[[:space:]]*-[0-9]+[[:space:]]*$/) {
+                    gsub(/^[[:space:]]*/, "", a[2]); 
+                    gsub(/[[:space:]]*$/, "", a[2]); 
+                    print a[1], a[2]
+                }
+            } 
+        }' "$GO_PACKAGE_FILE" 2>/dev/null || true
+    } | sort -f > "$go_values_file"
+    
+    # Compare values
+    join -i "$c_values_file" "$go_values_file" > "$comparison_file" 2>/dev/null || true
+    
+    # Count matches and mismatches
+    local total_constants=$(wc -l < "$c_values_file")
+    local matching_constants=$(wc -l < "$comparison_file")
+    
+    if [ "$total_constants" -gt 0 ]; then
+        log_success "Found $matching_constants matching constants out of $total_constants C constants"
+    fi
+    
+    # Store comparison results for reporting
+    echo "$comparison_file" > "$TEMP_DIR/constant_comparison_file"
+    echo "$c_values_file" > "$TEMP_DIR/c_values_file"
+    echo "$go_values_file" > "$TEMP_DIR/go_values_file"
 }
 
 # Function to extract CLI commands
@@ -198,12 +265,13 @@ calculate_coverage() {
     local go_file="$2"
     
     local c_count=$(wc -l < "$c_file")
-    local go_count=$(wc -l < "$go_file")
+    local missing_count=$(comm -23 "$c_file" "$go_file" 2>/dev/null | wc -l)
     
     if [ "$c_count" -eq 0 ]; then
         echo "0"
     else
-        echo "scale=1; $go_count * 100 / $c_count" | bc -l 2>/dev/null || echo "0"
+        local covered_count=$((c_count - missing_count))
+        echo "scale=1; $covered_count * 100 / $c_count" | bc -l 2>/dev/null || echo "0"
     fi
 }
 
@@ -378,6 +446,9 @@ main() {
     extract_c_api "$TEMP_DIR/c_api.txt"
     extract_go_api "$TEMP_DIR/go_api.txt"
     extract_cli_commands "$TEMP_DIR/cli_commands.txt"
+    
+    # Extract and compare constant values
+    extract_constant_values
     
     # Generate reports
     generate_coverage_report
