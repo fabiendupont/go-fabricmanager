@@ -244,10 +244,10 @@ generate_json_report() {
   "go_api_count": $go_count,
   "coverage_percentage": $coverage_percent,
   "missing_c_symbols": [
-$(comm -23 "$c_api_file" "$go_api_file" 2>/dev/null | sed 's/^/    "/; s/$/",/' | sed '$ s/,$//' || echo "")
+$(comm -23 "$c_api_file" "$go_api_file" 2>/dev/null | sed 's/"/\\"/g' | sed 's/^/    "/; s/$/",/' | sed '$ s/,$//' || echo "")
   ],
   "extra_go_symbols": [
-$(comm -13 "$c_api_file" "$go_api_file" 2>/dev/null | sed 's/^/    "/; s/$/",/' | sed '$ s/,$//' || echo "")
+$(comm -13 "$c_api_file" "$go_api_file" 2>/dev/null | sed 's/"/\\"/g' | sed 's/^/    "/; s/$/",/' | sed '$ s/,$//' || echo "")
   ]
 }
 EOF
