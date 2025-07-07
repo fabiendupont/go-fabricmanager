@@ -103,6 +103,11 @@ jobs:
     # Basic checks (all scenarios)
     - name: Build package
       run: |
+        pwd
+        ls -la
+        ls -la cmd/
+        echo "CGO_ENABLED=$CGO_ENABLED"
+        echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
         CGO_ENABLED=1 go build -o fmpm ./cmd/fmpm
         
     - name: Run unit tests
