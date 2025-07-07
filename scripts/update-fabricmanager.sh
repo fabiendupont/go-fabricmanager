@@ -66,13 +66,13 @@ get_latest_version() {
 # Function to get current version from Git tags
 get_current_version() {
     # Get the latest tag that matches our versioning pattern
-    local latest_tag=$(git tag --list "v*" --sort=-version:refname | grep -E "^v[0-9]+\.[0-9]+\.[0-9]+-[0-9]+$" | head -1)
+    local latest_tag=$(git tag --list "v*" --sort=-version:refname | grep -E "^v[0-9]+\.[0-9]+\.[0-9]+-[0-9]+\.[0-9]+$" | head -1)
     
     if [ -z "$latest_tag" ]; then
         echo "none"
     else
-        # Extract FabricManager version from tag (remove 'v' prefix and '-<number>' suffix)
-        echo "$latest_tag" | sed 's/^v//' | sed 's/-[0-9]*$//'
+        # Extract FabricManager version from tag (remove 'v' prefix and '-<X.Y>' suffix)
+        echo "$latest_tag" | sed 's/^v//' | sed 's/-[0-9]*\.[0-9]*$//'
     fi
 }
 
@@ -100,7 +100,7 @@ get_all_versions() {
 
 # Function to get all existing Git tags
 get_existing_tags() {
-    git tag --list "v*" --sort=version:refname | grep -E "^v[0-9]+\.[0-9]+\.[0-9]+-[0-9]+$" | sed 's/^v//' | sed 's/-[0-9]*$//'
+    git tag --list "v*" --sort=version:refname | grep -E "^v[0-9]+\.[0-9]+\.[0-9]+-[0-9]+\.[0-9]+$" | sed 's/^v//' | sed 's/-[0-9]*\.[0-9]*$//'
 }
 
 # Function to find missing versions
@@ -257,14 +257,26 @@ create_version_tag() {
     local version=$1
     
     # Find the next Go change number for this FabricManager version
-    local next_number=1
-    local existing_tags=$(git tag --list "v${version}-*" | sed 's/.*-//' | sort -n | tail -1)
+    # Start with 1.0 for new versions, increment Y for fixes, X for features
+    local next_x=1
+    local next_y=0
+    local existing_tags=$(git tag --list "v${version}-*" | sed 's/.*-//' | sort -V | tail -1)
     
     if [ -n "$existing_tags" ]; then
-        next_number=$((existing_tags + 1))
+        # Parse existing X.Y format
+        if [[ "$existing_tags" =~ ^([0-9]+)\.([0-9]+)$ ]]; then
+            next_x=${BASH_REMATCH[1]}
+            next_y=${BASH_REMATCH[2]}
+            # For now, just increment Y (bug fixes)
+            next_y=$((next_y + 1))
+        else
+            # Fallback: assume it's a single number and convert to X.Y
+            next_x=$((existing_tags + 1))
+            next_y=0
+        fi
     fi
     
-    local tag_name="v${version}-${next_number}"
+    local tag_name="v${version}-${next_x}.${next_y}"
     
     log_info "Creating release tag $tag_name..."
     
@@ -430,7 +442,7 @@ main() {
     # Update headers directory
     update_headers "$extracted_dir" "$target_version"
     if [ $? -ne 0 ]; then
-        log_error "Failed to update third-party directory"
+        log_error "Failed to update headers directory"
         exit 1
     fi
     

@@ -15,7 +15,7 @@ echo -e "${BLUE}=== NVIDIA FabricManager Go Package Version Status ===${NC}"
 echo
 
 # Get current version from Git tags
-current_version=$(git tag --list "v*" --sort=-version:refname | grep -E "^v[0-9]+\.[0-9]+\.[0-9]+-[0-9]+$" | head -1 | sed 's/^v//' | sed 's/-[0-9]*$//')
+current_version=$(git tag --list "v*" --sort=-version:refname | grep -E "^v[0-9]+\.[0-9]+\.[0-9]+-[0-9]+\.[0-9]+$" | head -1 | sed 's/^v//' | sed 's/-[0-9]*\.[0-9]*$//')
 
 if [ -z "$current_version" ]; then
     echo -e "${YELLOW}Current version: None (no tags found)${NC}"
@@ -27,7 +27,7 @@ echo
 
 # Get all existing tags
 echo -e "${BLUE}Existing version tags:${NC}"
-existing_tags=$(git tag --list "v*" --sort=version:refname | grep -E "^v[0-9]+\.[0-9]+\.[0-9]+-[0-9]+$" | sed 's/^v//' | sed 's/-[0-9]*$//')
+existing_tags=$(git tag --list "v*" --sort=version:refname | grep -E "^v[0-9]+\.[0-9]+\.[0-9]+-[0-9]+\.[0-9]+$" | sed 's/^v//' | sed 's/-[0-9]*\.[0-9]*$//')
 
 if [ -z "$existing_tags" ]; then
     echo "  None"
