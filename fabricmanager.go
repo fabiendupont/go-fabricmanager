@@ -17,7 +17,7 @@ import (
 
 // Version information
 const (
-	Version = "1.0.0"
+	Version = "575.57.08"
 )
 
 // Return codes from FabricManager API
