@@ -93,6 +93,16 @@ extract_go_api() {
         # Types
         grep -h "^type\s\+[A-Z][a-zA-Z0-9_]*" "$GO_PACKAGE_FILE" 2>/dev/null || true
         
+        # Types in type blocks
+        awk '/^type \($/,/^\)$/ { 
+            if ($0 ~ /^[[:space:]]*[A-Z][A-Za-z0-9_]*[[:space:]]/) { 
+                gsub(/^[[:space:]]*/, ""); 
+                gsub(/[[:space:]]*$/, ""); 
+                split($0, a, /[[:space:]]/); 
+                print a[1]
+            }
+        }' "$GO_PACKAGE_FILE" 2>/dev/null || true
+        
         # Individual constants
         grep -h "^const\s\+[A-Z][a-zA-Z0-9_]*" "$GO_PACKAGE_FILE" 2>/dev/null || true
         
