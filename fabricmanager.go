@@ -1,3 +1,6 @@
+//go:build cgo
+// +build cgo
+
 package fabricmanager
 
 /*
@@ -51,10 +54,44 @@ const (
 
 // Default values
 const (
-	FM_CMD_PORT_NUMBER       = 6666
-	FM_MAX_STR_LENGTH        = 256
-	FM_MAX_NUM_GPUS          = 16
-	FM_MAX_FABRIC_PARTITIONS = 64
+	FM_CMD_PORT_NUMBER               = 6666
+	FM_MAX_STR_LENGTH                = 256
+	FM_MAX_NUM_GPUS                  = 16
+	FM_MAX_FABRIC_PARTITIONS         = 64
+	FM_MAX_NUM_NVLINK_PORTS          = 64
+	FM_MAX_NUM_NVSWITCHES            = 12
+	FM_DEVICE_PCI_BUS_ID_BUFFER_SIZE = 32
+	FM_UUID_BUFFER_SIZE              = 80
+)
+
+// Version constants for API structures
+const (
+	// Version macros for various structures
+	FM_ACTIVATED_FABRIC_PARTITION_LIST_VERSION1 = 1
+	FM_ACTIVATED_FABRIC_PARTITION_LIST_VERSION  = FM_ACTIVATED_FABRIC_PARTITION_LIST_VERSION1
+
+	FM_CONNECT_PARAMS_VERSION1 = 1
+	FM_CONNECT_PARAMS_VERSION  = FM_CONNECT_PARAMS_VERSION1
+
+	FM_FABRIC_PARTITION_LIST_VERSION2 = 1
+	FM_FABRIC_PARTITION_LIST_VERSION  = FM_FABRIC_PARTITION_LIST_VERSION2
+
+	FM_NVLINK_FAILED_DEVICES_VERSION1 = 1
+	FM_NVLINK_FAILED_DEVICES_VERSION  = FM_NVLINK_FAILED_DEVICES_VERSION1
+
+	FM_UNSUPPORTED_FABRIC_PARTITION_LIST_VERSION1 = 1
+	FM_UNSUPPORTED_FABRIC_PARTITION_LIST_VERSION  = FM_UNSUPPORTED_FABRIC_PARTITION_LIST_VERSION1
+)
+
+// Helper function to create version numbers (equivalent to MAKE_FM_PARAM_VERSION macro)
+func makeFMParamVersion(typeSize uintptr, version uint32) uint32 {
+	return uint32(typeSize) | (version << 24)
+}
+
+// Header guard constants (these are typically used in C headers)
+const (
+	NV_FM_AGENT_H = 1
+	NV_FM_TYPES_H = 1
 )
 
 // Error types
@@ -148,6 +185,38 @@ type UnsupportedPartition struct {
 	NumGPUs        uint32
 	GPUPhysicalIDs []uint32
 }
+
+// Type aliases for C typedefs
+type (
+	// Fabric partition ID type
+	FabricPartitionID uint32
+
+	// Type aliases for various C structures (these would be implemented as needed)
+	ActivatedFabricPartitionList struct {
+		// Implementation would depend on the actual C structure
+		// This is a placeholder for the typedef
+	}
+
+	ConnectParams struct {
+		// Implementation would depend on the actual C structure
+		// This is a placeholder for the typedef
+	}
+
+	FabricPartitionList struct {
+		// Implementation would depend on the actual C structure
+		// This is a placeholder for the typedef
+	}
+
+	NvlinkFailedDevicesList struct {
+		// Implementation would depend on the actual C structure
+		// This is a placeholder for the typedef
+	}
+
+	UnsupportedFabricPartitionList struct {
+		// Implementation would depend on the actual C structure
+		// This is a placeholder for the typedef
+	}
+)
 
 // Client represents a connection to FabricManager
 type Client struct {
