@@ -1,0 +1,19 @@
+# NVIDIA FabricManager Go Package License
+
+This Go package is a wrapper around NVIDIA FabricManager and is subject to the same license terms as the underlying NVIDIA FabricManager software.
+
+## License Terms
+
+The use of this software is governed by the "License For Customer Use of NVIDIA Software" which can be found in the `third-party/fabricmanager/LICENSE` file.
+
+## Important Notice
+
+This Go package is provided as-is and is subject to the same terms and conditions as the NVIDIA FabricManager software. By using this package, you agree to be bound by the NVIDIA license terms.
+
+## Copyright
+
+Copyright (c) 2024 NVIDIA Corporation. All rights reserved.
+
+## Disclaimer
+
+This software is provided "AS IS" without warranty of any kind. See the NVIDIA license for complete terms and disclaimers. 

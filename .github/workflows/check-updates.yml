@@ -1,0 +1,124 @@
+name: Check for FabricManager Updates
+
+on:
+  schedule:
+    # Check daily at 9 AM UTC
+    - cron: '0 9 * * *'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  check-updates:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+        
+    - name: Make update script executable
+      run: chmod +x scripts/update-fabricmanager.sh
+      
+    - name: Check for new FabricManager versions
+      id: check-version
+      run: |
+        if ./scripts/update-fabricmanager.sh --check-only; then
+          echo "new_version=true" >> $GITHUB_OUTPUT
+          echo "New FabricManager version available!"
+        else
+          echo "new_version=false" >> $GITHUB_OUTPUT
+          echo "No new version available"
+        fi
+        
+    - name: Create Issue for New Version
+      if: steps.check-version.outputs.new_version == 'true'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const { execSync } = require('child_process');
+          
+          // Get current version from Git tags
+          const currentVersion = execSync('git tag --list "v*" --sort=-version:refname | grep -E "^v[0-9]+\\.[0-9]+\\.[0-9]+\\.0$" | head -1 | sed "s/^v//" | sed "s/\\.0$//"', { encoding: 'utf8' }).trim();
+          
+          // Get target version from the update script output
+          const targetVersion = execSync('./scripts/update-fabricmanager.sh --check-only 2>&1 | grep "New version available" | sed "s/.*-> //"', { encoding: 'utf8' }).trim();
+          
+          const issueTitle = `Update to FabricManager version ${targetVersion}`;
+          const issueBody = `
+          ## New FabricManager Version Available
+          
+          **Current Version:** ${currentVersion}
+          **New Version:** ${targetVersion}
+          
+          ### Action Required
+          
+          Please update the Go package to support the new FabricManager version:
+          
+          1. Run the update script:
+             \`\`\`bash
+             ./scripts/update-fabricmanager.sh --version ${targetVersion}
+             \`\`\`
+          
+          2. Test the build:
+             \`\`\`bash
+             make test
+             make build
+             \`\`\`
+          
+          3. Create a new release:
+             \`\`\`bash
+             git tag v${targetVersion}.0
+             git push origin v${targetVersion}.0
+             \`\`\`
+          
+          ### Automated Update
+          
+          You can also run the automated update:
+          \`\`\`bash
+          ./scripts/update-fabricmanager.sh --version ${targetVersion} --create-tag
+          \`\`\`
+          
+          ---
+          
+          *This issue was automatically created by the update checker workflow.*
+          `;
+          
+          await github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: issueTitle,
+            body: issueBody,
+            labels: ['enhancement', 'fabricmanager-update']
+          });
+          
+    - name: Comment on existing issue
+      if: steps.check-version.outputs.new_version == 'true'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const { execSync } = require('child_process');
+          const targetVersion = execSync('./scripts/update-fabricmanager.sh --check-only 2>&1 | grep "New version available" | sed "s/.*-> //"', { encoding: 'utf8' }).trim();
+          
+          // Search for existing issues with the same title
+          const issues = await github.rest.issues.listForRepo({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            state: 'open',
+            labels: ['fabricmanager-update']
+          });
+          
+          const existingIssue = issues.data.find(issue => 
+            issue.title.includes(`Update to FabricManager version ${targetVersion}`)
+          );
+          
+          if (existingIssue) {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: existingIssue.number,
+              body: `This version is still pending update. Please review and update when ready.`
+            });
+          } 
