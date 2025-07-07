@@ -52,6 +52,44 @@ jobs:
           echo "branch_type=main" >> $GITHUB_OUTPUT
         fi
         
+    - name: Install FabricManager runtime library
+      if: startsWith(github.ref_name, 'fm/')
+      run: |
+        echo "Installing FabricManager runtime library for version: ${{ steps.version.outputs.version }}"
+        
+        # Download and extract FabricManager archive
+        ARCHIVE_URL="https://developer.download.nvidia.com/compute/nvidia-driver/redist/fabricmanager/linux-x86_64/fabricmanager-linux-x86_64-${{ steps.version.outputs.version }}-archive.tar.xz"
+        echo "Downloading from: $ARCHIVE_URL"
+        
+        # Download archive
+        curl -L -o fabricmanager.tar.xz "$ARCHIVE_URL"
+        
+        # Extract archive
+        tar -xf fabricmanager.tar.xz
+        
+        # Find the extracted directory
+        EXTRACTED_DIR="fabricmanager-linux-x86_64-${{ steps.version.outputs.version }}-archive"
+        
+        # Install runtime library
+        if [ -f "$EXTRACTED_DIR/lib/libnvfm.so.1" ]; then
+          echo "Installing libnvfm.so.1 to /usr/local/lib"
+          sudo mkdir -p /usr/local/lib
+          sudo cp "$EXTRACTED_DIR/lib/libnvfm.so.1" /usr/local/lib/
+          sudo ln -sf /usr/local/lib/libnvfm.so.1 /usr/local/lib/libnvfm.so
+          
+          # Update library cache
+          sudo ldconfig
+          
+          echo "✅ Runtime library installed successfully"
+        else
+          echo "❌ Runtime library not found in $EXTRACTED_DIR/lib/"
+          ls -la "$EXTRACTED_DIR/lib/" || true
+          exit 1
+        fi
+        
+        # Cleanup
+        rm -rf fabricmanager.tar.xz "$EXTRACTED_DIR"
+        
     - name: Verify headers exist
       if: startsWith(github.ref_name, 'fm/')
       run: |
