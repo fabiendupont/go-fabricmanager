@@ -1,6 +1,6 @@
 # NVIDIA FabricManager Go Package
 
-![API Coverage](https://img.shields.io/badge/API%20Coverage-0%25-red)
+![API Coverage](https://img.shields.io/badge/API%20Coverage-35.7%25-brightgreen)
 
 A Go package and CLI tool for managing GPU partitions for NVIDIA Fabric Manager's Shared NVSwitch feature.
 
