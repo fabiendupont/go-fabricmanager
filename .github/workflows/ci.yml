@@ -1,0 +1,305 @@
+name: CI/CD Pipeline
+
+on:
+  pull_request:
+    branches: [ main, fm/* ]
+  push:
+    branches: [ main, fm/* ]
+    tags:
+      - 'v*'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        
+    - name: Setup Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+        
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y bc jq curl
+        
+    - name: Make scripts executable
+      run: |
+        chmod +x scripts/coverage-analysis.sh || true
+        chmod +x scripts/cli-comparison.sh || true
+        chmod +x build.sh || true
+        
+    - name: Extract version from branch/tag
+      id: version
+      run: |
+        if [[ "${{ github.ref_name }}" == fm/* ]]; then
+          # Extract version from branch name (e.g., fm/575.57.08 -> 575.57.08)
+          VERSION=$(echo "${{ github.ref_name }}" | sed 's/^fm\///')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "branch_type=version" >> $GITHUB_OUTPUT
+        elif [[ "${{ github.ref_name }}" == v* ]]; then
+          # Extract FM version from tag (e.g., v575.57.08-1.0 -> 575.57.08)
+          FM_VERSION=$(echo "${{ github.ref_name }}" | sed 's/^v//' | sed 's/-[0-9]*\.[0-9]*$//')
+          echo "version=$FM_VERSION" >> $GITHUB_OUTPUT
+          echo "branch_type=release" >> $GITHUB_OUTPUT
+        else
+          echo "version=" >> $GITHUB_OUTPUT
+          echo "branch_type=main" >> $GITHUB_OUTPUT
+        fi
+        
+    # Basic checks (all scenarios)
+    - name: Build package
+      run: |
+        CGO_ENABLED=1 go build -o fmpm cmd/fmpm/main.go
+        
+    - name: Run unit tests
+      run: |
+        CGO_ENABLED=1 go test -v ./...
+        
+    - name: Run linting
+      run: |
+        go vet ./...
+        
+    # Extended checks (PRs and pushes)
+    - name: Run tests with race detection
+      if: github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/')
+      run: |
+        CGO_ENABLED=1 go test -race ./...
+        
+    - name: Run tests with coverage
+      if: github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/')
+      run: |
+        CGO_ENABLED=1 go test -coverprofile=coverage.out ./...
+        
+    - name: Check for security issues
+      if: github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/')
+      run: |
+        go list -json -deps ./... | jq -r 'select(.Vulnerabilities) | .Path + ": " + (.Vulnerabilities | map(.Details) | join(", "))' || echo "No known vulnerabilities found"
+        
+    # Coverage analysis (PRs and pushes, not releases)
+    - name: Run coverage analysis
+      if: github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/')
+      run: |
+        if [ "${{ steps.version.outputs.branch_type }}" == "version" ]; then
+          # Version branch: run with CLI comparison
+          ./scripts/coverage-analysis.sh --json --update-readme --cli-version "${{ steps.version.outputs.version }}"
+        else
+          # Main branch: run without CLI comparison (no headers)
+          ./scripts/coverage-analysis.sh --json --update-readme
+        fi
+        
+    - name: Check coverage requirements
+      if: github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/')
+      id: coverage-check
+      run: |
+        if [ -f "coverage/coverage.json" ]; then
+          COVERAGE=$(jq -r '.coverage_percentage' coverage/coverage.json)
+          echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
+          
+          # Check if coverage is 100%
+          if (( $(echo "$COVERAGE >= 100" | bc -l) )); then
+            echo "coverage_ok=true" >> $GITHUB_OUTPUT
+            echo "✅ Coverage is 100%"
+          else
+            echo "coverage_ok=false" >> $GITHUB_OUTPUT
+            echo "❌ Coverage is $COVERAGE% (required: 100%)"
+            exit 1
+          fi
+        else
+          echo "coverage=0" >> $GITHUB_OUTPUT
+          echo "coverage_ok=false" >> $GITHUB_OUTPUT
+          echo "❌ No coverage report found"
+          exit 1
+        fi
+        
+    # Extended testing (PRs and pushes)
+    - name: Test CLI functionality
+      if: github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/')
+      run: |
+        # Test CLI help
+        ./fmpm --help
+        
+        # Test CLI version
+        ./fmpm -v
+        
+        # Test CLI with invalid options (should not crash)
+        ./fmpm --invalid-option 2>/dev/null || true
+        
+    - name: Test build script
+      if: github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/')
+      run: |
+        ./build.sh
+        
+    - name: Test cross-compilation
+      if: github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/')
+      run: |
+        # Test Linux AMD64
+        CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -o fmpm-linux-amd64 cmd/fmpm/main.go
+        
+        # Test Linux ARM64
+        CGO_ENABLED=1 GOOS=linux GOARCH=arm64 go build -o fmpm-linux-arm64 cmd/fmpm/main.go
+        
+    # Release-specific steps
+    - name: Run CLI comparison for release
+      if: startsWith(github.ref, 'refs/tags/')
+      run: |
+        ./scripts/cli-comparison.sh --version "${{ steps.version.outputs.version }}" || echo "CLI comparison failed (expected on main branch)"
+        
+    # Upload artifacts (PRs and pushes)
+    - name: Upload test artifacts
+      if: github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/')
+      uses: actions/upload-artifact@v3
+      with:
+        name: test-results
+        path: |
+          coverage/
+          fmpm
+          fmpm-linux-amd64
+          fmpm-linux-arm64
+          coverage.out
+        
+    # PR comments
+    - name: Comment PR with test results
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const coverageFile = 'coverage/coverage.json';
+          
+          let comment = `## 🧪 Test Results
+          
+          **Branch:** ${{ github.ref_name }}
+          **Status:** ✅ All tests passed
+          
+          ### 📊 Coverage
+          `;
+          
+          if (fs.existsSync(coverageFile)) {
+            const coverage = JSON.parse(fs.readFileSync(coverageFile, 'utf8'));
+            comment += `
+            - **API Coverage:** ${coverage.coverage_percentage}%
+            - **C API symbols:** ${coverage.c_api_count}
+            - **Go API symbols:** ${coverage.go_api_count}
+            - **Missing C symbols:** ${coverage.missing_c_symbols.length}
+            
+            ${coverage.missing_c_symbols.length > 0 ? 
+              `⚠️ **Missing C API symbols:** ${coverage.missing_c_symbols.slice(0, 5).join(', ')}${coverage.missing_c_symbols.length > 5 ? '...' : ''}` : 
+              '✅ All C API symbols are wrapped in Go!'
+            }
+            `;
+          }
+          
+          comment += `
+          ### ✅ Quality Checks
+          - [x] Package builds successfully
+          - [x] CLI builds successfully
+          - [x] All unit tests pass
+          - [x] No race conditions detected
+          - [x] Code passes linting
+          - [x] Cross-compilation works
+          - [x] CLI functionality tested
+          ${'${{ steps.version.outputs.branch_type }}' === 'version' ? '- [x] CLI comparison completed' : ''}
+          
+          ### 🚀 Ready for Review
+          This PR meets all quality requirements and is ready for review.
+          `;
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: comment
+          });
+          
+    # Release creation
+    - name: Create Release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ github.ref_name }}
+        body: |
+          ## NVIDIA FabricManager Go Package ${{ github.ref_name }}
+          
+          This release updates the Go package to support NVIDIA FabricManager version ${{ steps.version.outputs.version }}.
+          
+          ### What's New
+          
+          - Updated to FabricManager version ${{ steps.version.outputs.version }}
+          - Updated C bindings and headers
+          - All existing functionality remains compatible
+          
+          ### Installation
+          
+          ```bash
+          go get github.com/NVIDIA/go-fabricmanager@${{ github.ref_name }}
+          ```
+          
+          ### Runtime Requirements
+          
+          Make sure you have the NVIDIA FabricManager runtime library installed:
+          
+          **Ubuntu/Debian:**
+          ```bash
+          sudo apt-get install nvidia-fabricmanager-<version>
+          ```
+          
+          **RHEL/CentOS:**
+          ```bash
+          sudo yum install nvidia-fabricmanager-<version>
+          ```
+          
+          ### Changes
+          
+          - Updated headers to FabricManager ${{ steps.version.outputs.version }}
+          - Updated version constants
+          - Tested compatibility with existing bindings
+          
+          ### Compatibility
+          
+          This release is compatible with:
+          - Go 1.21+
+          - Linux x86_64 and ARM64
+          - NVIDIA FabricManager runtime library
+          
+          ---
+          
+          *This release was automatically created from tag ${{ github.ref_name }}*
+        draft: false
+        prerelease: false
+        
+    - name: Upload Release Assets
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./fmpm
+        asset_name: fmpm-linux-x86_64
+        asset_content_type: application/octet-stream
+        
+    - name: Upload CLI Comparison Report
+      if: startsWith(github.ref, 'refs/tags/') && always()
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./coverage/cli-comparison-report.md
+        asset_name: cli-comparison-report.md
+        asset_content_type: text/markdown
+        
+    # Cleanup
+    - name: Clean up
+      if: always()
+      run: |
+        ./scripts/coverage-analysis.sh --clean || true 

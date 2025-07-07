@@ -1,0 +1,27 @@
+# Third-Party Components Notice
+
+This project includes components from NVIDIA Corporation that are subject to their own license terms.
+
+## NVIDIA FabricManager
+
+The following components are © NVIDIA Corporation and subject to NVIDIA's license terms:
+
+- Headers in `headers/` directory (when present on version branches)
+- Any NVIDIA FabricManager libraries referenced by this project
+- Original `fmpm` CLI tool and related binaries
+
+### NVIDIA License Information
+
+NVIDIA FabricManager is proprietary software governed by NVIDIA's "License For Customer Use of NVIDIA Software". 
+Users must comply with NVIDIA's license terms when using NVIDIA components.
+
+### Important Notice
+
+This Go package is NOT affiliated with or endorsed by NVIDIA Corporation. 
+The Go bindings, CLI implementation, and all original code in this repository are licensed under the MIT License.
+
+## This Project
+
+The Go bindings, CLI tool, scripts, and all original code in this repository are licensed under the MIT License (see LICENSE file).
+
+Copyright (c) 2024 NVIDIA FabricManager Go Package Contributors 
