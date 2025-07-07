@@ -53,11 +53,11 @@ jobs:
         fi
         
     - name: Verify headers exist
-      if: steps.version.outputs.branch_type == 'version' || steps.version.outputs.branch_type == 'release'
+      if: startsWith(github.ref_name, 'fm/')
       run: |
         echo "Verifying FabricManager headers for version: ${{ steps.version.outputs.version }}"
         if [ ! -d "headers" ] || [ ! -f "headers/nv_fm_agent.h" ]; then
-          echo "Error: Headers not found. Please run: ./scripts/update-fabricmanager.sh --version ${{ steps.version.outputs.version }} --create-branch --skip-tests --skip-build"
+          echo "Error: Headers not found. Please run: ./scripts/update-fabricmanager.sh --version ${{ steps.version.outputs.version }} --skip-tests --skip-build"
           exit 1
         fi
         echo "✅ Headers found and ready"

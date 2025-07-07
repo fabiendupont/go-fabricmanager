@@ -462,7 +462,7 @@ main() {
                 echo "  --skip-tests   Skip running tests after update"
                 echo "  --skip-build   Skip building after update"
                 echo "  --create-tag   Create git tag for the new version"
-                echo "  --create-branch Create/checkout version-specific branch (fm/VERSION)"
+                echo "  --create-branch (deprecated: branch creation is now automatic with --version)"
                 echo "  --check-only   Only check for new versions, don't update"
                 echo "  --status       Show current version status"
                 echo "  --help         Show this help message"
@@ -513,8 +513,9 @@ main() {
         fi
     fi
     
-    # Create or checkout version branch if requested
-    if [ "$create_branch" = true ]; then
+    # Create or checkout version branch if a specific version is provided
+    # This ensures we're working on the correct branch for the target version
+    if [ -n "$target_version" ]; then
         create_version_branch "$target_version"
         if [ $? -ne 0 ]; then
             log_error "Failed to set up version branch"
