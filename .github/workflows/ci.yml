@@ -52,6 +52,10 @@ jobs:
           echo "branch_type=main" >> $GITHUB_OUTPUT
         fi
         
+    - name: Make update-fabricmanager.sh executable
+      if: steps.version.outputs.branch_type == 'version' || steps.version.outputs.branch_type == 'release'
+      run: chmod +x scripts/update-fabricmanager.sh
+        
     - name: Download FabricManager headers
       if: steps.version.outputs.branch_type == 'version' || steps.version.outputs.branch_type == 'release'
       run: |
