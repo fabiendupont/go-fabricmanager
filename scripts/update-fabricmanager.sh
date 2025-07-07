@@ -230,6 +230,8 @@ update_headers() {
         log_error "No include directory found in extracted archive"
         log_info "Contents of $extracted_dir:"
         ls -la "$extracted_dir" || true
+        log_info "Looking for include directory in subdirectories..."
+        find "$extracted_dir" -type d -name "include" -exec ls -la {} \; || true
         return 1
     fi
     
@@ -274,6 +276,55 @@ build_after_update() {
         log_error "Build failed"
         return 1
     fi
+}
+
+# Function to create or checkout version-specific branch
+create_version_branch() {
+    local version=$1
+    local branch_name="fm/$version"
+    
+    log_info "Setting up branch for version $version..."
+    
+    # Check if we're already on the correct branch
+    local current_branch=$(git branch --show-current 2>/dev/null || git rev-parse --abbrev-ref HEAD)
+    if [ "$current_branch" = "$branch_name" ]; then
+        log_info "Already on branch $branch_name"
+        return 0
+    fi
+    
+    # Check if branch exists locally
+    if git show-ref --verify --quiet refs/heads/"$branch_name"; then
+        log_info "Checking out existing branch $branch_name"
+        if ! git checkout "$branch_name"; then
+            log_error "Failed to checkout branch $branch_name"
+            return 1
+        fi
+    else
+        # Check if branch exists remotely
+        if git ls-remote --heads origin "$branch_name" | grep -q "$branch_name"; then
+            log_info "Checking out remote branch $branch_name"
+            if ! git checkout -b "$branch_name" "origin/$branch_name"; then
+                log_error "Failed to checkout remote branch $branch_name"
+                return 1
+            fi
+        else
+            # Create new branch from main
+            log_info "Creating new branch $branch_name from main"
+            if ! git checkout main; then
+                log_error "Failed to checkout main branch"
+                return 1
+            fi
+            if ! git pull origin main; then
+                log_warning "Failed to pull latest main, continuing anyway"
+            fi
+            if ! git checkout -b "$branch_name"; then
+                log_error "Failed to create branch $branch_name"
+                return 1
+            fi
+        fi
+    fi
+    
+    log_success "Successfully set up branch $branch_name"
 }
 
 # Function to create version-specific tag and release
@@ -365,6 +416,7 @@ main() {
     local create_tag=false
     local check_only=false
     local show_status=false
+    local create_branch=false
     
     # Parse command line arguments
     while [[ $# -gt 0 ]]; do
@@ -397,6 +449,10 @@ main() {
                 show_status=true
                 shift
                 ;;
+            --create-branch)
+                create_branch=true
+                shift
+                ;;
             --help)
                 echo "Usage: $0 [OPTIONS]"
                 echo ""
@@ -406,6 +462,7 @@ main() {
                 echo "  --skip-tests   Skip running tests after update"
                 echo "  --skip-build   Skip building after update"
                 echo "  --create-tag   Create git tag for the new version"
+                echo "  --create-branch Create/checkout version-specific branch (fm/VERSION)"
                 echo "  --check-only   Only check for new versions, don't update"
                 echo "  --status       Show current version status"
                 echo "  --help         Show this help message"
@@ -452,6 +509,15 @@ main() {
             exit 0
         else
             log_info "No new version available"
+            exit 1
+        fi
+    fi
+    
+    # Create or checkout version branch if requested
+    if [ "$create_branch" = true ]; then
+        create_version_branch "$target_version"
+        if [ $? -ne 0 ]; then
+            log_error "Failed to set up version branch"
             exit 1
         fi
     fi
